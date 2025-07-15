@@ -2,6 +2,7 @@ import pandas as pd
 import re
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
 
 def generate_excel_report(articles, output_file):
@@ -90,6 +91,15 @@ def generate_excel_report(articles, output_file):
 
     # Create DataFrame
     df = pd.DataFrame(report_data)
+
+    # Sanitize text fields to remove characters illegal in Excel
+    def _sanitize(value):
+        if isinstance(value, str):
+            return ILLEGAL_CHARACTERS_RE.sub("", value)
+        return value
+
+    for col in df.columns:
+        df[col] = df[col].apply(_sanitize)
 
     # Format Excel output
     with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
