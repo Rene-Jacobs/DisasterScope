@@ -1,0 +1,13 @@
+/.env
+/__pycache__/
+/*.pyc
+/*.pyo
+/*.pyd
+reports/*.xlsx
+reports/*.csv
+src/__pycache__/
+src/utils/__pycache__/
+src/gui/__pycache__/
+src/gui/__pycache__
+/.vscode/*
+/*.xlsx
