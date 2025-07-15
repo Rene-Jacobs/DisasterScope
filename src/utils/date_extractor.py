@@ -213,7 +213,9 @@ def extract_date_from_text_patterns(html: Any) -> Optional[str]:
     """Extract dates using common text patterns."""
     try:
         full_text = html.body.text() if html.body else ""
-    except:
+    except AttributeError:
+        # Fallback to the generic text representation if the body element is
+        # missing. Allow other errors to propagate for easier debugging.
         full_text = html.text() if hasattr(html, "text") else ""
 
     date_patterns = [
@@ -329,7 +331,9 @@ def extract_date_from_government_site(html: Any, domain: str) -> Optional[str]:
     """Special handling for government websites."""
     try:
         full_text = html.body.text() if html.body else ""
-    except:
+    except AttributeError:
+        # Some government pages might not have a <body> element. Use the raw
+        # text as a fallback but allow unexpected exceptions to surface.
         full_text = html.text() if hasattr(html, "text") else ""
 
     # Check for specific government site patterns
