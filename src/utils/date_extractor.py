@@ -9,7 +9,7 @@ import re
 import logging
 from datetime import datetime
 from dateparser import parse as parse_date
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 import json
 
