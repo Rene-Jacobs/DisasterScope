@@ -8,6 +8,7 @@ from various HTML structures and formats commonly found in web articles.
 import re
 import logging
 from datetime import datetime
+from dateparser import parse as parse_date
 from typing import Optional, Dict, Any, List, Union
 from urllib.parse import urlparse
 import json
@@ -373,54 +374,16 @@ def normalize_date(date_str: str, method: str = "unknown") -> Optional[str]:
 
     date_str = str(date_str).strip()
 
-    # If it's just a month name, add current year
-    month_names = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-    ]
-    if date_str in month_names:
-        current_year = datetime.now().year
-        return f"{current_year}-{month_names.index(date_str)+1:02d}-01"
-
-    # If it's just a year
+    # Explicit handling for year-only strings
     if date_str.isdigit() and len(date_str) == 4:
         return f"{date_str}-01-01"
 
-    # Try to parse with simple regex patterns
-    try:
-        # Handle ISO format dates
-        if "T" in date_str:
-            iso_match = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_str)
-            if iso_match:
-                return f"{iso_match.group(1)}-{iso_match.group(2)}-{iso_match.group(3)}"
+    # Attempt to parse using dateparser
+    dt = parse_date(date_str, settings={"PREFER_DAY_OF_MONTH": "first"})
+    if dt:
+        return dt.strftime("%Y-%m-%d")
 
-        # Handle common date formats
-        date_patterns = [
-            (r"(\d{4})-(\d{1,2})-(\d{1,2})", "{0}-{1:02d}-{2:02d}"),
-            (r"(\d{1,2})/(\d{1,2})/(\d{4})", "{2}-{0:02d}-{1:02d}"),  # MM/DD/YYYY
-            (r"(\d{1,2})-(\d{1,2})-(\d{4})", "{2}-{0:02d}-{1:02d}"),  # MM-DD-YYYY
-        ]
-
-        for pattern, format_str in date_patterns:
-            match = re.search(pattern, date_str)
-            if match:
-                parts = [int(x) for x in match.groups()]
-                return format_str.format(*parts)
-
-    except (ValueError, TypeError):
-        pass
-
-    # Attempt to extract a year
+    # Fallback: try to extract a year
     year_match = re.search(r"20\d{2}", date_str)
     if year_match:
         return f"{year_match.group(0)}-01-01"
