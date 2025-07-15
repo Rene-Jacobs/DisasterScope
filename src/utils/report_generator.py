@@ -510,6 +510,40 @@ def extract_recovery_info(text):
     return "Recovery Status Unknown"
 
 
+def clean_whitespace(text):
+    """
+    Removes excessive whitespace from text while preserving intentional formatting.
+
+    Args:
+        text (str): Input text with potential whitespace issues
+
+    Returns:
+        str: Cleaned text with normalized whitespace
+    """
+    if not text or not isinstance(text, str):
+        return text
+
+    # Remove leading/trailing whitespace
+    text = text.strip()
+
+    # Replace multiple consecutive spaces with single space
+    text = re.sub(r" +", " ", text)
+
+    # Replace multiple consecutive newlines with double newline (paragraph break)
+    text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
+
+    # Remove spaces at the beginning/end of lines
+    text = re.sub(r"^\s+|\s+$", "", text, flags=re.MULTILINE)
+
+    # Remove trailing spaces before newlines
+    text = re.sub(r" +\n", "\n", text)
+
+    # Normalize bullet point spacing
+    text = re.sub(r"•\s+", "• ", text)
+
+    return text
+
+
 def format_impact_details(text, sector):
     """
     Formats the impact details for better readability in the report,
@@ -524,7 +558,10 @@ def format_impact_details(text, sector):
     ):
         return "No detailed impact information available. Source may require direct access."
 
-    # If the text already has a structured format with bullet points, keep it
+    # Clean whitespace first
+    text = clean_whitespace(text)
+
+    # If the text already has a structured format with bullet points, clean and return it
     if (
         text.startswith("KEY IMPACTS:")
         or text.startswith("STRUCTURED IMPACT DATA:")
@@ -597,6 +634,11 @@ def format_impact_details(text, sector):
     sector_sentences = []
 
     for sentence in sentences:
+        # Clean each sentence
+        sentence = clean_whitespace(sentence)
+        if not sentence:  # Skip empty sentences
+            continue
+
         sentence_lower = sentence.lower()
         is_impact = any(keyword in sentence_lower for keyword in impact_keywords)
         is_sector = any(
@@ -623,5 +665,8 @@ def format_impact_details(text, sector):
         formatted_text = f"{sector.upper()} INFORMATION:\n" + "\n".join(
             sector_sentences
         )
+
+    # Final cleanup of the formatted text
+    formatted_text = clean_whitespace(formatted_text)
 
     return formatted_text
