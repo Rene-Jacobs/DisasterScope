@@ -196,6 +196,7 @@ The end result is a spreadsheet that shows which communications systems were aff
    * It downloads the HTML content
    * It parses the HTML to extract text
    * It looks for the publication date using multiple methods
+   * If no date can be found, it records "Date unknown" rather than using today's date
    * It identifies paragraphs about communications impacts
    * It scores these paragraphs based on relevance
    * It extracts the most informative content
