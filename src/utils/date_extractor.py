@@ -8,11 +8,8 @@ from various HTML structures and formats commonly found in web articles.
 import re
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Union
 from urllib.parse import urlparse
-from dateutil import parser as date_parser
-import dateparser
-from dateparser.search import search_dates
 import json
 
 # Configure logging only once
@@ -53,10 +50,19 @@ def _search_json_ld_for_date(obj: Any) -> Optional[str]:
 
 
 def extract_and_normalize_date(
-    html, domain: str, json_ld_data: list, url: str
+    html: Any, domain: str, json_ld_data: Optional[List[Dict]], url: str
 ) -> Optional[str]:
     """
     Extract publication date using layered heuristics and normalize to YYYY-MM-DD.
+
+    Args:
+        html: SelectoLax HTMLParser object
+        domain: Domain of the website
+        json_ld_data: List of JSON-LD data dictionaries
+        url: URL of the article
+
+    Returns:
+        Normalized date string or None if not found
     """
     # Load JSON-LD if not provided
     if not json_ld_data:
@@ -64,7 +70,11 @@ def extract_and_normalize_date(
         json_ld_data = []
         for s in scripts:
             try:
-                json_ld_data.append(json.loads(s.text()))
+                data = json.loads(s.text())
+                if isinstance(data, dict):
+                    json_ld_data.append(data)
+                elif isinstance(data, list):
+                    json_ld_data.extend(data)
             except json.JSONDecodeError:
                 continue
 
@@ -87,31 +97,25 @@ def extract_and_normalize_date(
         logger.info(f"Date from <time>: {date_str}")
         return normalize_date(date_str)
 
-    # 4. Visible datelines via dateparser
-    date_str = extract_date_via_dateparser(html)
-    if date_str:
-        logger.info(f"Date via dateparser: {date_str}")
-        return normalize_date(date_str)
-
-    # 5. Elements with date-related classes or IDs
+    # 4. Elements with date-related classes or IDs
     date_str = extract_date_from_class_elements(html)
     if date_str:
         logger.info(f"Date from class elements: {date_str}")
         return normalize_date(date_str)
 
-    # 6. Generic text pattern search
+    # 5. Generic text pattern search
     date_str = extract_date_from_text_patterns(html)
     if date_str:
         logger.info(f"Date from text patterns: {date_str}")
         return normalize_date(date_str)
 
-    # 7. URL-based patterns
+    # 6. URL-based patterns
     date_str = extract_date_from_url(url)
     if date_str:
         logger.info(f"Date from URL: {date_str}")
         return normalize_date(date_str)
 
-    # 8. Government site "Updated" stamps
+    # 7. Government site "Updated" stamps
     if domain and (".gov" in domain or ".mil" in domain):
         date_str = extract_date_from_government_site(html, domain)
         if date_str:
@@ -126,46 +130,16 @@ def extract_and_normalize_date(
     return None
 
 
-def extract_date_via_dateparser(html) -> Optional[str]:
-    """
-    Search visible text for dates using dateparser with multiple locales.
-    """
-    text = html.body.text() if html.body else ""
-    text = text[:2000]  # limit to improve accuracy
-    # Try to find a date expression
-    results = search_dates(
-        text,
-        languages=["en"],
-        settings={
-            "RETURN_AS_TIMEZONE_AWARE": False,
-            "PREFER_DAY_OF_MONTH": "first",
-            "DATE_ORDER": "MDY",
-        },
-    )
-    if results:
-        # results is list of (matched_text, datetime)
-        _, dt = results[0]
-        return dt.strftime("%Y-%m-%d")
-    return None
-
-
-def extract_date_from_json_ld(json_ld_data: Any) -> Optional[str]:
+def extract_date_from_json_ld(json_ld_data: List[Dict]) -> Optional[str]:
     """Extract date from JSON-LD structured data."""
-    if isinstance(json_ld_data, dict):
-        items = [json_ld_data]
-    elif isinstance(json_ld_data, list):
-        items = json_ld_data
-    else:
-        return None
-
-    for item in items:
+    for item in json_ld_data:
         result = _search_json_ld_for_date(item)
         if result:
             return result
     return None
 
 
-def extract_date_from_meta_tags(html) -> Optional[str]:
+def extract_date_from_meta_tags(html: Any) -> Optional[str]:
     """Extract date from meta tags."""
     meta_properties = [
         "article:published_time",
@@ -216,27 +190,31 @@ def extract_date_from_meta_tags(html) -> Optional[str]:
 
         for selector in selectors:
             meta = html.css_first(selector)
-            if meta and meta.attributes.get("content"):
+            if meta and hasattr(meta, "attributes") and meta.attributes.get("content"):
                 return meta.attributes.get("content")
     return None
 
 
-def extract_date_from_time_tags(html) -> Optional[str]:
+def extract_date_from_time_tags(html: Any) -> Optional[str]:
     """Extract date from time tags."""
     time_tags = html.css("time")
     for time_tag in time_tags:
-        if time_tag.attributes.get("datetime"):
-            return time_tag.attributes.get("datetime")
-        if time_tag.attributes.get("data-time"):
-            return time_tag.attributes.get("data-time")
-        elif time_tag.text() and re.search(r"\d{4}", time_tag.text()):
+        if hasattr(time_tag, "attributes"):
+            if time_tag.attributes.get("datetime"):
+                return time_tag.attributes.get("datetime")
+            if time_tag.attributes.get("data-time"):
+                return time_tag.attributes.get("data-time")
+        if time_tag.text() and re.search(r"\d{4}", time_tag.text()):
             return time_tag.text().strip()
     return None
 
 
-def extract_date_from_text_patterns(html) -> Optional[str]:
+def extract_date_from_text_patterns(html: Any) -> Optional[str]:
     """Extract dates using common text patterns."""
-    full_text = html.body.text() if html.body else ""
+    try:
+        full_text = html.body.text() if html.body else ""
+    except:
+        full_text = html.text() if hasattr(html, "text") else ""
 
     date_patterns = [
         # ISO format
@@ -258,11 +236,11 @@ def extract_date_from_text_patterns(html) -> Optional[str]:
     for pattern in date_patterns:
         matches = re.findall(pattern, full_text, re.IGNORECASE)
         if matches:
-            return matches[0]
+            return matches[0] if isinstance(matches[0], str) else matches[0][0]
     return None
 
 
-def extract_date_from_class_elements(html) -> Optional[str]:
+def extract_date_from_class_elements(html: Any) -> Optional[str]:
     """Extract date from elements with date-related classes or IDs."""
     date_classes = [
         "date",
@@ -347,9 +325,12 @@ def extract_date_from_url(url: str) -> Optional[str]:
     return None
 
 
-def extract_date_from_government_site(html, domain: str) -> Optional[str]:
+def extract_date_from_government_site(html: Any, domain: str) -> Optional[str]:
     """Special handling for government websites."""
-    full_text = html.body.text() if html.body else ""
+    try:
+        full_text = html.body.text() if html.body else ""
+    except:
+        full_text = html.text() if hasattr(html, "text") else ""
 
     # Check for specific government site patterns
     last_updated_patterns = [
@@ -415,93 +396,46 @@ def normalize_date(date_str: str, method: str = "unknown") -> Optional[str]:
     if date_str.isdigit() and len(date_str) == 4:
         return f"{date_str}-01-01"
 
-    # Try to parse with dateutil
+    # Try to parse with simple regex patterns
     try:
         # Handle ISO format dates
         if "T" in date_str:
-            # Try ISO format with timezone
-            if date_str.endswith("Z"):
-                date_str = date_str[:-1] + "+00:00"
-            parsed_date = date_parser.parse(date_str)
-        else:
-            # For non-ISO formats
-            parsed_date = date_parser.parse(date_str, fuzzy=True)
+            iso_match = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_str)
+            if iso_match:
+                return f"{iso_match.group(1)}-{iso_match.group(2)}-{iso_match.group(3)}"
 
-        # Get just the date part
-        normalized = parsed_date.strftime("%Y-%m-%d")
-        logger.debug(
-            f"Normalized date from '{date_str}' to '{normalized}' (method: {method})"
-        )
-        return normalized
+        # Handle common date formats
+        date_patterns = [
+            (r"(\d{4})-(\d{1,2})-(\d{1,2})", "{0}-{1:02d}-{2:02d}"),
+            (r"(\d{1,2})/(\d{1,2})/(\d{4})", "{2}-{0:02d}-{1:02d}"),  # MM/DD/YYYY
+            (r"(\d{1,2})-(\d{1,2})-(\d{4})", "{2}-{0:02d}-{1:02d}"),  # MM-DD-YYYY
+        ]
 
-    except Exception as e:
-        logger.warning(f"Failed to parse date '{date_str}' with dateutil: {e}")
+        for pattern, format_str in date_patterns:
+            match = re.search(pattern, date_str)
+            if match:
+                parts = [int(x) for x in match.groups()]
+                return format_str.format(*parts)
 
-        # Fallback: Try to extract year and basic patterns
-        year_match = re.search(r"20\d{2}", date_str)
-        if year_match:
-            year = year_match.group(0)
+    except (ValueError, TypeError):
+        pass
 
-            # Try to extract month
-            month = 1  # Default to January
-            month_patterns = [
-                (
-                    r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)",
-                    {
-                        "Jan": 1,
-                        "Feb": 2,
-                        "Mar": 3,
-                        "Apr": 4,
-                        "May": 5,
-                        "Jun": 6,
-                        "Jul": 7,
-                        "Aug": 8,
-                        "Sep": 9,
-                        "Oct": 10,
-                        "Nov": 11,
-                        "Dec": 12,
-                    },
-                ),
-                (
-                    r"(January|February|March|April|May|June|July|August|September|October|November|December)",
-                    {
-                        "January": 1,
-                        "February": 2,
-                        "March": 3,
-                        "April": 4,
-                        "May": 5,
-                        "June": 6,
-                        "July": 7,
-                        "August": 8,
-                        "September": 9,
-                        "October": 10,
-                        "November": 11,
-                        "December": 12,
-                    },
-                ),
-            ]
+    # Attempt to extract a year
+    year_match = re.search(r"20\d{2}", date_str)
+    if year_match:
+        return f"{year_match.group(0)}-01-01"
 
-            for pattern, month_map in month_patterns:
-                month_match = re.search(pattern, date_str, re.I)
-                if month_match:
-                    month_name = month_match.group(1)
-                    # Handle case insensitivity
-                    for key, value in month_map.items():
-                        if key.lower() == month_name.lower():
-                            month = value
-                            break
-                    break
+    return "Date unknown"
 
-            # Try to extract day
-            day = 1  # Default to first day
-            day_match = re.search(r"\b(\d{1,2})(st|nd|rd|th)?\b", date_str)
-            if day_match:
-                day = int(day_match.group(1))
-                # Validate day (in case of parsing errors)
-                day = min(max(day, 1), 28)
 
-            return f"{year}-{month:02d}-{day:02d}"
-
-        # If we still can't extract a date, return the original
-        logger.warning(f"Could not normalize date '{date_str}', returning as is")
-        return date_str
+__all__ = [
+    "extract_and_normalize_date",
+    "normalize_date",
+    "extract_date_from_json_ld",
+    "extract_date_from_meta_tags",
+    "extract_date_from_time_tags",
+    "extract_date_from_text_patterns",
+    "extract_date_from_class_elements",
+    "extract_date_from_url",
+    "extract_date_from_government_site",
+]

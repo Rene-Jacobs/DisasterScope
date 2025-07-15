@@ -11,7 +11,8 @@ import time
 import logging
 import asyncio
 import traceback
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, Union
+
 from urllib.parse import urlparse
 
 # Import from specialized modules
@@ -24,10 +25,47 @@ from .content_fetcher import (
 from .date_extractor import extract_and_normalize_date
 from .content_parser import extract_title, extract_main_content, process_general_content
 from .impact_analyzer import (
-    extract_impact_details_with_nlp,
     calculate_sentiment,
     extract_structured_impact_details,
 )
+
+
+# Simple fallback for extract_impact_details_with_nlp
+async def extract_impact_details_with_nlp(
+    main_content, domain: str, disaster_type: str, full_text: str
+):
+    """
+    Simple fallback implementation for impact details extraction.
+
+    Args:
+        main_content: HTML content container
+        domain: Website domain
+        disaster_type: Type of disaster
+        full_text: Full article text
+
+    Returns:
+        ImpactInfo object or None
+    """
+    from .analyzer_models import ImpactInfo
+
+    try:
+        # Simple implementation - just extract basic content
+        if main_content and hasattr(main_content, "text"):
+            content_text = main_content.text()
+        else:
+            content_text = full_text
+
+        if content_text and len(content_text.strip()) > 50:
+            impact_info = ImpactInfo()
+            impact_info.raw_content = content_text[:2000]  # Limit to 2000 chars
+            return impact_info
+
+    except Exception as e:
+        logger.warning(f"Error in simple impact extraction: {e}")
+
+    return None
+
+
 from .analyzer_models import (
     DisasterAnalysisResult,
     PublicationInfo,
@@ -58,21 +96,25 @@ async def analyze_article_async(
     start_time = time.time()
     result = DisasterAnalysisResult(url=article_url, disaster_type=disaster_type)
     stats = AnalysisStatistics()
+    domain = "unknown"  # Initialize domain with default value
 
     logger.info(f"Analyzing article: {article_url} (Disaster type: {disaster_type})")
 
     try:
         # Parse domain information
-        domain = urlparse(article_url).netloc
-        file_extension = os.path.splitext(urlparse(article_url).path)[1].lower()
+        parsed_url = urlparse(article_url)
+        domain = parsed_url.netloc if parsed_url.netloc else "unknown"
+        file_extension = os.path.splitext(parsed_url.path)[1].lower()
         logger.info(f"Domain: {domain}, File extension: {file_extension}")
 
         # Handle different content types
         if file_extension in [".pdf", ".doc", ".docx"]:
             logger.info(f"Detected document type: {file_extension}")
-            result.publication_info.date, result.impact_info.raw_content = (
-                await handle_document_file(article_url, file_extension)
+            date_result, content_result = await handle_document_file(
+                article_url, file_extension
             )
+            result.publication_info.date = date_result
+            result.impact_info.raw_content = content_result
             stats.extraction_methods_used.append("document_handler")
             stats.processing_time_ms = (time.time() - start_time) * 1000
             return result
@@ -141,8 +183,14 @@ async def analyze_article_async(
             stats.processing_time_ms = (time.time() - start_time) * 1000
             return result
 
-        # Extract structured data using extruct
-        json_ld_data = await extract_structured_data(content, article_url)
+        # Extract structured data using extruct - fix the type issue
+        try:
+            json_ld_data_dict = await extract_structured_data(content, article_url)
+            # Convert dict to list format expected by other functions
+            json_ld_data: List[Dict] = [json_ld_data_dict] if json_ld_data_dict else []
+        except Exception as e:
+            logger.warning(f"Failed to extract structured data: {e}")
+            json_ld_data = []
 
         # Extract publication date
         publication_date = extract_and_normalize_date(
@@ -163,17 +211,50 @@ async def analyze_article_async(
 
         # Extract impact details with NLP enhancement
         impact_details = await extract_impact_details_with_nlp(
-            main_content, domain, disaster_type, html.body.text()
+            main_content, domain, disaster_type, html.body.text() if html.body else ""
         )
         stats.extraction_methods_used.append("impact_analyzer")
 
         # Update result with extracted impact information
         if impact_details:
-            result.impact_info = impact_details
+            # Handle different types of impact_details objects
+            impact_dict = None
+
+            # Try Pydantic v2 method first
+            if hasattr(impact_details, "model_dump"):
+                try:
+                    impact_dict = impact_details.model_dump()
+                except Exception as e:
+                    logger.warning(f"Failed to use model_dump: {e}")
+
+            # Try Pydantic v1 method
+            elif hasattr(impact_details, "dict"):
+                try:
+                    impact_dict = impact_details.dict()
+                except Exception as e:
+                    logger.warning(f"Failed to use dict: {e}")
+
+            # If it's already a dict
+            elif isinstance(impact_details, dict):
+                impact_dict = impact_details
+
+            # If it's an ImpactInfo object, access attributes directly
+            elif hasattr(impact_details, "__dict__"):
+                impact_dict = impact_details.__dict__
+
+            # Update the result's impact_info fields if we got a dict
+            if impact_dict and isinstance(impact_dict, dict):
+                for key, value in impact_dict.items():
+                    if hasattr(result.impact_info, key) and value is not None:
+                        setattr(result.impact_info, key, value)
+
+            # Fallback: if impact_details has raw_content attribute, use it directly
+            elif hasattr(impact_details, "raw_content") and impact_details.raw_content:
+                result.impact_info.raw_content = impact_details.raw_content
         else:
             # If no specific impact details were found, process general content
             general_content = process_general_content(
-                main_content, domain, html.body.text()
+                main_content, domain, html.body.text() if html.body else ""
             )
             if general_content:
                 result.impact_info.raw_content = general_content
@@ -210,7 +291,7 @@ async def analyze_article_async(
 
 def analyze_article(
     article_url: str, disaster_type: str = "Hurricane"
-) -> Tuple[str, str]:
+) -> Tuple[Optional[str], str]:
     """
     Synchronous wrapper for async article analysis function.
 

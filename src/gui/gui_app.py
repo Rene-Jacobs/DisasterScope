@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, scrolledtext, simpledialog
+from typing import List, Optional
 from dotenv import load_dotenv
 import src.utils.search_api as search_api
 import src.utils.article_analyzer as article_analyzer
@@ -563,8 +564,16 @@ class DisasterAnalyzerApp:
                 f"Found {len(results)} relevant articles. Processing in parallel..."
             )
 
-            # Extract article URLs
-            article_urls = [result.get("link") for result in results]
+            # Extract article URLs and filter out None values - THIS IS THE FIX
+            article_urls = []
+            for result in results:
+                url = result.get("link")
+                if url and isinstance(url, str):  # Only add valid URL strings
+                    article_urls.append(url)
+
+            if not article_urls:
+                self.update_status("No valid article URLs found.")
+                return
 
             # Process articles in parallel
             self.update_status(
@@ -600,7 +609,7 @@ class DisasterAnalyzerApp:
             articles = []
             for result in results:
                 link = result.get("link")
-                if link in analysis_dict:
+                if link and link in analysis_dict:
                     analysis = analysis_dict[link]
 
                     # Get publication date from analysis result
@@ -687,3 +696,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = DisasterAnalyzerApp(root)
     root.mainloop()
+    # To run the GUI, execute: python -m src.gui.gui_app

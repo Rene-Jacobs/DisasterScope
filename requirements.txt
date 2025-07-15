@@ -7,12 +7,13 @@ lxml==4.9.3
 urllib3==2.0.7
 regex==2023.10.3
 tk==0.1.0
-selectolax==0.3.14  # Added for HTML parsing
-tenacity==8.2.3     # Added for retry logic
-pydantic==1.10.13   # Added for data validation
-playwright==1.40.0  # Added for JavaScript rendering
-python-dateutil==2.8.2  # Added for date parsing
-spacy==3.7.2        # Added for NLP
-nltk==3.8.1         # Added for text processing
-aiohttp==3.9.1      # Added for async HTTP requests
-extruct==0.16.0     # Added for metadata extraction
+selectolax==0.3.14
+tenacity==8.2.3
+pydantic>=2.0.0,<3.0.0  
+playwright==1.40.0
+python-dateutil==2.8.2
+spacy==3.7.2
+nltk==3.8.1
+aiohttp==3.9.1
+extruct==0.16.0
+dateparser==1.2.0 

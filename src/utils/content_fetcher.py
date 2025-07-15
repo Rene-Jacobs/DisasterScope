@@ -13,7 +13,8 @@ import asyncio
 import os
 import random
 import logging
-from typing import Tuple, Optional
+import json
+from typing import Tuple, Optional, Dict, Any
 from urllib.parse import urlparse, urljoin
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -149,7 +150,7 @@ async def fetch_article_with_retry(url: str) -> Tuple[str, int, str]:
             logger.error(f"aiohttp client error while fetching {url}: {e}")
             raise
         except asyncio.TimeoutError:
-            logger.error(f"Request to {url} timed out after {timeout} seconds")
+            logger.error(f"Request to {url} timed out after {timeout_seconds} seconds")
             # Skip the Playwright fallback for performance
             raise
         except Exception as e:
@@ -167,22 +168,29 @@ async def fetch_with_playwright(url: str) -> str:
     Returns:
         HTML content as string
     """
-    # Import here to avoid unnecessary dependency if not used
-    from playwright.async_api import async_playwright
+    try:
+        # Import here to avoid unnecessary dependency if not used
+        from playwright.async_api import async_playwright
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        try:
-            page = await browser.new_page()
-            await page.goto(
-                url, wait_until="networkidle", timeout=45000
-            )  # Increased timeout for gov sites
-            # Wait a bit longer for JS to execute
-            await asyncio.sleep(5)
-            content = await page.content()
-            return content
-        finally:
-            await browser.close()
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            try:
+                page = await browser.new_page()
+                await page.goto(
+                    url, wait_until="networkidle", timeout=45000
+                )  # Increased timeout for gov sites
+                # Wait a bit longer for JS to execute
+                await asyncio.sleep(5)
+                content = await page.content()
+                return content
+            finally:
+                await browser.close()
+    except ImportError:
+        logger.error("Playwright not available. Install with: pip install playwright")
+        raise
+    except Exception as e:
+        logger.error(f"Playwright error: {e}")
+        raise
 
 
 async def handle_document_file(url: str, file_extension: str) -> Tuple[str, str]:
@@ -214,9 +222,9 @@ async def handle_document_file(url: str, file_extension: str) -> Tuple[str, str]
     )
 
 
-async def extract_structured_data(html_content: str, url: str) -> dict:
+async def extract_structured_data(html_content: str, url: str) -> Dict[str, Any]:
     """
-    Extract structured data from HTML using extruct.
+    Extract structured data from HTML using simple JSON-LD extraction.
 
     Args:
         html_content: HTML content as string
@@ -226,18 +234,31 @@ async def extract_structured_data(html_content: str, url: str) -> dict:
         Dictionary of structured data
     """
     try:
-        # Import here to avoid unnecessary dependency if not used
-        from extruct import JsonLdExtractor
+        # Simple JSON-LD extraction
+        json_ld_pattern = (
+            r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>'
+        )
+        matches = re.findall(json_ld_pattern, html_content, re.DOTALL | re.IGNORECASE)
 
-        jslde = JsonLdExtractor()
-        data = jslde.extract(html_content, url)
-        if data:
-            # If data is a list of dicts, return the first dict; otherwise, return an empty dict
-            if isinstance(data, list) and data and isinstance(data[0], dict):
-                return data[0]
-            elif isinstance(data, dict):
-                return data
+        for match in matches:
+            try:
+                data = json.loads(match.strip())
+                if isinstance(data, dict):
+                    return data
+                elif isinstance(data, list) and data:
+                    return data[0] if isinstance(data[0], dict) else {}
+            except json.JSONDecodeError:
+                continue
+
     except Exception as e:
         logger.warning(f"Error extracting JSON-LD: {e}")
 
     return {}
+
+
+__all__ = [
+    "fetch_article_with_retry",
+    "fetch_with_playwright",
+    "handle_document_file",
+    "extract_structured_data",
+]

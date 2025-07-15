@@ -9,29 +9,17 @@ and site-specific adaptations.
 
 import re
 import logging
-from typing import Optional, Dict, List, Tuple, Set, Union
+from typing import Optional, Dict, List, Tuple, Set, Union, Any
 from urllib.parse import urlparse
 import math
 from collections import Counter
 import string
-from bs4 import BeautifulSoup
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import sent_tokenize
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-# Ensure NLTK data is available
-try:
-    nltk.data.find("tokenizers/punkt")
-    nltk.data.find("corpora/stopwords")
-except LookupError:
-    nltk.download("punkt", quiet=True)
-    nltk.download("stopwords", quiet=True)
 
 # Known content templates by domain category
 CONTENT_TEMPLATES = {
@@ -207,7 +195,7 @@ BOILERPLATE_SELECTORS = [
 ]
 
 
-def extract_title(html, json_ld_data: Dict) -> Optional[str]:
+def extract_title(html: Any, json_ld_data: Optional[List[Dict]]) -> Optional[str]:
     """
     Extract article title from HTML or JSON-LD data.
 
@@ -251,7 +239,7 @@ def extract_title(html, json_ld_data: Dict) -> Optional[str]:
     ]
 
     for meta in meta_titles:
-        if meta and meta.attributes.get("content"):
+        if meta and hasattr(meta, "attributes") and meta.attributes.get("content"):
             return meta.attributes.get("content")
 
     # Try H1 element
@@ -283,7 +271,7 @@ def identify_site_category(domain: str) -> Optional[str]:
     return None
 
 
-def extract_main_content(html, domain: str) -> Optional[object]:
+def extract_main_content(html: Any, domain: str) -> Optional[Any]:
     """
     Extracts the main content container from the HTML using multiple strategies.
 
@@ -391,7 +379,7 @@ def extract_main_content(html, domain: str) -> Optional[object]:
     return html.body
 
 
-def is_boilerplate(node) -> bool:
+def is_boilerplate(node: Any) -> bool:
     """
     Determine if a node is likely boilerplate content.
 
@@ -402,12 +390,16 @@ def is_boilerplate(node) -> bool:
         True if node appears to be boilerplate, False otherwise
     """
     # Check tag type
-    if node.tag_name in ["nav", "header", "footer", "aside"]:
+    if hasattr(node, "tag") and node.tag in ["nav", "header", "footer", "aside"]:
         return True
 
     # Check element ID and class
-    node_id = node.attributes.get("id", "").lower()
-    node_class = node.attributes.get("class", "").lower()
+    node_id = (
+        node.attributes.get("id", "").lower() if hasattr(node, "attributes") else ""
+    )
+    node_class = (
+        node.attributes.get("class", "").lower() if hasattr(node, "attributes") else ""
+    )
 
     # Check against known boilerplate patterns
     for pattern in [
@@ -444,7 +436,7 @@ def is_paywall_site(domain: str) -> bool:
     return any(paywall_domain in domain.lower() for paywall_domain in PAYWALL_SITES)
 
 
-def identify_content_blocks_by_density(html) -> List:
+def identify_content_blocks_by_density(html: Any) -> List[Any]:
     """
     Identify main content blocks using text density analysis.
 
@@ -472,9 +464,12 @@ def identify_content_blocks_by_density(html) -> List:
 
         # Count text nodes directly inside this div
         text_nodes = 0
-        for child in div.iter():
-            if child.tag_name == None and child.text().strip():
-                text_nodes += 1
+        try:
+            for child in div.iter():
+                if hasattr(child, "tag") and child.tag is None and child.text().strip():
+                    text_nodes += 1
+        except:
+            pass
 
         # Calculate metrics
         html_size = len(div.html)
@@ -493,7 +488,7 @@ def identify_content_blocks_by_density(html) -> List:
     return [c[0] for c in candidates[:3]]  # Return top 3 candidates
 
 
-def process_general_content(container, domain: str, full_text: str) -> str:
+def process_general_content(container: Any, domain: str, full_text: str) -> str:
     """
     Process general content for communication impact info when specific impact details aren't found.
 
@@ -619,7 +614,7 @@ def process_general_content(container, domain: str, full_text: str) -> str:
     return ""
 
 
-def extract_structured_elements(container) -> str:
+def extract_structured_elements(container: Any) -> str:
     """
     Extract structured elements like tables, lists, and blockquotes.
 
@@ -676,111 +671,6 @@ def extract_structured_elements(container) -> str:
     return ""
 
 
-def extract_article_paragraphs(html) -> List[str]:
-    """
-    Extract paragraphs from an article.
-
-    Args:
-        html: HTML parser object
-
-    Returns:
-        List of paragraph texts
-    """
-    paragraphs = []
-
-    # Try to get paragraphs from the article
-    p_tags = html.css("p")
-    for p in p_tags:
-        text = p.text().strip()
-        if text and len(text) > 30:  # Skip very short paragraphs
-            paragraphs.append(text)
-
-    return paragraphs
-
-
-def extract_article_sections(html) -> List[str]:
-    """
-    Extract sections (divs, sections, etc.) from an article.
-
-    Args:
-        html: HTML parser object
-
-    Returns:
-        List of section texts
-    """
-    sections = []
-
-    # Try to get content from semantic sections
-    for selector in ["section", "div.section", "div[role='region']", "article > div"]:
-        section_elements = html.css(selector)
-        for section in section_elements:
-            text = section.text().strip()
-            if text and len(text) > 100:  # Only substantial sections
-                sections.append(text)
-
-    return sections
-
-
-def extract_text_by_headers(html) -> Dict[str, str]:
-    """
-    Extract content organized by headers to understand document structure.
-
-    Args:
-        html: HTML parser object
-
-    Returns:
-        Dictionary mapping header text to content under that header
-    """
-    header_content = {}
-
-    # Get all headers
-    headers = html.css("h1, h2, h3, h4, h5, h6")
-
-    # Process each header
-    for i, header in enumerate(headers):
-        header_text = header.text().strip()
-        if not header_text:
-            continue
-
-        # Find content between this header and the next
-        content = []
-        current = header.next
-
-        while current and (i == len(headers) - 1 or current != headers[i + 1]):
-            if current.tag_name in ["p", "ul", "ol", "blockquote", "table", "div"]:
-                text = current.text().strip()
-                if text:
-                    content.append(text)
-            current = current.next
-
-        # Join content and add to dictionary
-        if content:
-            header_content[header_text] = "\n\n".join(content)
-
-    return header_content
-
-
-def find_content_by_keywords(paragraphs: List[str], keywords: List[str]) -> List[str]:
-    """
-    Filter paragraphs by keywords.
-
-    Args:
-        paragraphs: List of paragraph texts
-        keywords: List of keywords to search for
-
-    Returns:
-        List of paragraphs containing keywords
-    """
-    relevant_paragraphs = []
-
-    for p in paragraphs:
-        p_lower = p.lower()
-        if any(keyword in p_lower for keyword in keywords):
-            relevant_paragraphs.append(p)
-
-    return relevant_paragraphs
-
-
 def calculate_relevance_score(text: str, keywords: List[str]) -> float:
     """
     Calculate relevance score for a text using TF-IDF like approach.
@@ -792,314 +682,122 @@ def calculate_relevance_score(text: str, keywords: List[str]) -> float:
     Returns:
         Relevance score (0.0 to 1.0)
     """
-    # Lowercase the text
-    text_lower = text.lower()
+    try:
+        import nltk
+        from nltk.tokenize import word_tokenize, sent_tokenize
+        from nltk.corpus import stopwords
 
-    # Tokenize the text
-    tokens = nltk.word_tokenize(text_lower)
+        # Download required NLTK data if not present
+        try:
+            nltk.data.find("tokenizers/punkt")
+        except LookupError:
+            nltk.download("punkt", quiet=True)
 
-    # Remove stopwords and punctuation
-    stop_words = set(stopwords.words("english"))
-    tokens = [t for t in tokens if t not in stop_words and t not in string.punctuation]
+        try:
+            nltk.data.find("corpora/stopwords")
+        except LookupError:
+            nltk.download("stopwords", quiet=True)
 
-    # Count token frequencies
-    token_freq = Counter(tokens)
+        # Lowercase the text
+        text_lower = text.lower()
 
-    # Calculate keyword frequency
-    keyword_count = 0
-    for keyword in keywords:
-        # Check compound keywords
-        if " " in keyword:
-            if keyword in text_lower:
-                keyword_count += 3  # Weight multi-word matches higher
-        else:
-            keyword_count += token_freq.get(keyword, 0)
+        # Tokenize the text
+        tokens = word_tokenize(text_lower)
 
-    # Normalize by text length
-    if not tokens:
-        return 0.0
-
-    relevance = (keyword_count / len(tokens)) * math.log(len(text_lower) + 1)
-
-    # Calculate sentence score for disaster-related content
-    sentences = sent_tokenize(text_lower)
-    sentence_scores = []
-
-    for sentence in sentences:
-        # Check for disaster impact patterns
-        impact_terms = [
-            "impact",
-            "affect",
-            "damage",
-            "destroy",
-            "disrupt",
-            "outage",
-            "down",
-            "fail",
+        # Remove stopwords and punctuation
+        stop_words = set(stopwords.words("english"))
+        tokens = [
+            t for t in tokens if t not in stop_words and t not in string.punctuation
         ]
-        has_impact = any(term in sentence for term in impact_terms)
 
-        # Check for infrastructure terms
-        infra_terms = [
-            "infrastructure",
-            "network",
-            "system",
-            "service",
-            "power",
-            "utility",
-        ]
-        has_infra = any(term in sentence for term in infra_terms)
+        # Count token frequencies
+        token_freq = Counter(tokens)
 
-        # Check for location/scope terms
-        location_terms = [
-            "area",
-            "region",
-            "city",
-            "county",
-            "state",
-            "nationwide",
-            "residents",
-        ]
-        has_location = any(term in sentence for term in location_terms)
+        # Calculate keyword frequency
+        keyword_count = 0
+        for keyword in keywords:
+            # Check compound keywords
+            if " " in keyword:
+                if keyword in text_lower:
+                    keyword_count += 3  # Weight multi-word matches higher
+            else:
+                keyword_count += token_freq.get(keyword, 0)
 
-        # Calculate sentence score
-        sent_score = (
-            (0.5 if has_impact else 0)
-            + (0.3 if has_infra else 0)
-            + (0.2 if has_location else 0)
-        )
-        sentence_scores.append(sent_score)
+        # Normalize by text length
+        if not tokens:
+            return 0.0
 
-    # Overall score is combination of keyword relevance and sentence scoring
-    avg_sentence_score = sum(sentence_scores) / len(sentences) if sentences else 0
-    final_score = (0.7 * relevance) + (0.3 * avg_sentence_score)
+        relevance = (keyword_count / len(tokens)) * math.log(len(text_lower) + 1)
 
-    return min(final_score, 1.0)  # Cap at 1.0
+        # Calculate sentence score for disaster-related content
+        sentences = sent_tokenize(text_lower)
+        sentence_scores = []
 
+        for sentence in sentences:
+            # Check for disaster impact patterns
+            impact_terms = [
+                "impact",
+                "affect",
+                "damage",
+                "destroy",
+                "disrupt",
+                "outage",
+                "down",
+                "fail",
+            ]
+            has_impact = any(term in sentence for term in impact_terms)
 
-def extract_image_captions(html) -> List[str]:
-    """
-    Extract captions from images which often contain impact summaries.
+            # Check for infrastructure terms
+            infra_terms = [
+                "infrastructure",
+                "network",
+                "system",
+                "service",
+                "power",
+                "utility",
+            ]
+            has_infra = any(term in sentence for term in infra_terms)
 
-    Args:
-        html: HTML parser object
+            # Check for location/scope terms
+            location_terms = [
+                "area",
+                "region",
+                "city",
+                "county",
+                "state",
+                "nationwide",
+                "residents",
+            ]
+            has_location = any(term in sentence for term in location_terms)
 
-    Returns:
-        List of image captions
-    """
-    captions = []
+            # Calculate sentence score
+            sent_score = (
+                (0.5 if has_impact else 0)
+                + (0.3 if has_infra else 0)
+                + (0.2 if has_location else 0)
+            )
+            sentence_scores.append(sent_score)
 
-    # Look for figure captions
-    figcaptions = html.css("figcaption")
-    for caption in figcaptions:
-        text = caption.text().strip()
-        if text and len(text) > 20:  # Skip very short captions
-            captions.append(text)
+        # Overall score is combination of keyword relevance and sentence scoring
+        avg_sentence_score = sum(sentence_scores) / len(sentences) if sentences else 0
+        final_score = (0.7 * relevance) + (0.3 * avg_sentence_score)
 
-    # Look for image alt text
-    imgs = html.css("img[alt]")
-    for img in imgs:
-        alt = img.attributes.get("alt", "").strip()
-        if (
-            alt
-            and len(alt) > 20
-            and not alt.lower().startswith(("image", "picture", "photo"))
-        ):
-            captions.append(alt)
+        return min(final_score, 1.0)  # Cap at 1.0
 
-    # Look for images with captions in various formats
-    caption_containers = html.css(
-        ".caption, .wp-caption-text, .image-caption, .gallery-caption"
-    )
-    for container in caption_containers:
-        text = container.text().strip()
-        if text and len(text) > 20:
-            captions.append(text)
-
-    return captions
-
-
-def clean_extracted_text(text: str) -> str:
-    """
-    Clean extracted text by removing excessive whitespace, etc.
-
-    Args:
-        text: Text to clean
-
-    Returns:
-        Cleaned text
-    """
-    if not text:
-        return ""
-
-    # Replace non-breaking spaces with regular spaces
-    text = text.replace("\xa0", " ")
-
-    # Replace multiple newlines with a single newline
-    text = re.sub(r"\n\s*\n", "\n\n", text)
-
-    # Replace multiple spaces with a single space
-    text = re.sub(r" +", " ", text)
-
-    # Remove repeated punctuation (except ellipsis)
-    text = re.sub(r"([!?])\1+", r"\1", text)
-
-    # Handle common encoding issues
-    text = text.replace("â€™", "'").replace("â€œ", '"').replace("â€", '"')
-
-    # Remove common JavaScript artifacts
-    text = re.sub(r"undefined|NaN|null|console\.log.*?;", "", text)
-
-    # Trim leading/trailing whitespace
-    text = text.strip()
-
-    return text
+    except ImportError:
+        # Fallback if NLTK is not available
+        logger.warning("NLTK not available, using simple keyword matching")
+        text_lower = text.lower()
+        keyword_count = sum(1 for keyword in keywords if keyword in text_lower)
+        return min(keyword_count / max(len(keywords), 1), 1.0)
 
 
-def validate_extracted_content(text: str, disaster_type: str) -> Tuple[bool, float]:
-    """
-    Validate extracted content to confirm it's relevant to disaster impacts.
-
-    Args:
-        text: Extracted content
-        disaster_type: Type of disaster being analyzed
-
-    Returns:
-        Tuple of (is_valid, confidence_score)
-    """
-    if not text or len(text) < 100:
-        return False, 0.0
-
-    text_lower = text.lower()
-
-    # Check for basic disaster terms
-    disaster_term = disaster_type.lower()
-    disaster_terms = [
-        disaster_term,
-        "disaster",
-        "emergency",
-        "incident",
-        "crisis",
-        "catastrophe",
-    ]
-    has_disaster_term = any(term in text_lower for term in disaster_terms)
-
-    # Check for impact terms
-    impact_terms = [
-        "impact",
-        "affect",
-        "damage",
-        "destroy",
-        "disrupt",
-        "outage",
-        "loss",
-        "failure",
-    ]
-    has_impact_term = any(term in text_lower for term in impact_terms)
-
-    # Check for communication/infrastructure terms
-    infrastructure_terms = [
-        "infrastructure",
-        "communication",
-        "network",
-        "system",
-        "service",
-        "telephone",
-        "cellular",
-        "internet",
-    ]
-    has_infrastructure_term = any(term in text_lower for term in infrastructure_terms)
-
-    # Calculate confidence score
-    confidence = 0.0
-
-    if has_disaster_term:
-        confidence += 0.4
-    if has_impact_term:
-        confidence += 0.3
-    if has_infrastructure_term:
-        confidence += 0.3
-
-    # Check if the content meets minimum criteria for validity
-    is_valid = confidence >= 0.4
-
-    return is_valid, confidence
-
-
-def detect_truncated_content(text: str) -> bool:
-    """
-    Detect if content appears to be truncated.
-
-    Args:
-        text: Content to check
-
-    Returns:
-        True if content appears truncated
-    """
-    # Check for common truncation indicators
-    truncation_markers = [
-        "... read more",
-        "...continue reading",
-        "to continue reading",
-        "full article",
-        "subscribe to",
-        "sign up for",
-        "premium content",
-        "paywall",
-        "subscribe now",
-    ]
-
-    text_lower = text.lower()
-    for marker in truncation_markers:
-        if marker in text_lower:
-            return True
-
-    # Check for abrupt ending
-    sentences = sent_tokenize(text)
-    if sentences:
-        last_sentence = sentences[-1].lower()
-
-        # Check if last sentence ends with ellipsis
-        if last_sentence.rstrip().endswith("..."):
-            return True
-
-        # Check for incomplete sentence
-        if len(last_sentence) < 20 and not any(x in last_sentence[-1] for x in ".!?"):
-            return True
-
-    return False
-
-
-def extract_content_with_confidence(
-    html, domain: str, disaster_type: str
-) -> Tuple[str, float]:
-    """
-    Extract content with confidence scoring.
-
-    Args:
-        html: HTML parser object
-        domain: Domain of the website
-        disaster_type: Type of disaster
-
-    Returns:
-        Tuple of (extracted_content, confidence_score)
-    """
-    # Extract main content container
-    main_content = extract_main_content(html, domain)
-
-    if not main_content:
-        return "", 0.0
-
-    # Process the content
-    extracted_text = process_general_content(main_content, domain, html.body.text())
-    extracted_text = clean_extracted_text(extracted_text)
-
-    # Validate content
-    is_valid, confidence = validate_extracted_content(extracted_text, disaster_type)
-
-    # Check for truncation
-    if detect_truncated_content(extracted_text):
-        logger.warning("Content appears to be truncated")
-        confidence *= 0.8  # Reduce confidence for truncated content
-
-    return extracted_text, confidence
+__all__ = [
+    "extract_title",
+    "extract_main_content",
+    "process_general_content",
+    "identify_site_category",
+    "is_paywall_site",
+    "calculate_relevance_score",
+    "extract_structured_elements",
+]
