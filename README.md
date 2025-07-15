@@ -5,7 +5,7 @@ A Python application for analyzing the impact of hurricanes and other disasters 
 ## Features
 
 * **Automated Article Search** : Uses Google Custom Search API to find articles about specific disasters and their impact on US communications systems
-* **Content Analysis** : Extracts publication dates and relevant impact details from articles
+* **Content Analysis** : Extracts publication dates and relevant impact details from articles. If a date can't be determined, the system records "Date unknown".
 * **Data Extraction** : Identifies mentions of communications infrastructure damage and outages
 * **Report Generation** : Creates Excel reports with organized findings
 * **User-friendly GUI** : Easy-to-use interface for setting search parameters and viewing progress

@@ -269,18 +269,7 @@ async def analyze_article_async(
         result.error = f"Error analyzing article: {str(e)}"
         stats.error_count += 1
 
-    # Final fallback: If we couldn't extract a date but we're on a .gov or .mil site, use today's date
-    if (
-        not result.publication_info.date
-        and domain
-        and ("gov" in domain or "mil" in domain)
-    ):
-        from datetime import datetime
-
-        result.publication_info.date = datetime.now().strftime("%Y-%m-%d")
-        logger.info(
-            f"Using current date for government/military site: {result.publication_info.date}"
-        )
+    # No fallback to current date. If no publication date is found, record "Date unknown" later.
 
     # Calculate processing time
     stats.processing_time_ms = (time.time() - start_time) * 1000

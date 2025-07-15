@@ -122,10 +122,8 @@ def extract_and_normalize_date(
         if date_str:
             logger.info(f"Date from gov/mil site: {date_str}")
             return normalize_date(date_str)
-        # fallback: use current date
-        today = datetime.now().strftime("%Y-%m-%d")
-        logger.info(f"Fallback current date: {today}")
-        return today
+        logger.warning("No date found on government/military site")
+        return None
 
     logger.warning(f"No date found for {url}")
     return None
