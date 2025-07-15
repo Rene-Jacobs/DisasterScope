@@ -181,18 +181,17 @@ def extract_date_from_meta_tags(html: Any) -> Optional[str]:
         "published-time",
     ]
 
-    for prop in meta_properties:
-        selectors = [
-            f'meta[property="{prop}"]',
-            f'meta[name="{prop}"]',
-            f'meta[itemprop="{prop}"]',
-            f'meta[http-equiv="{prop}"]',
-        ]
-
-        for selector in selectors:
-            meta = html.css_first(selector)
-            if meta and hasattr(meta, "attributes") and meta.attributes.get("content"):
-                return meta.attributes.get("content")
+    allowed = {p.lower() for p in meta_properties}
+    for meta in html.css("meta"):
+        if not hasattr(meta, "attributes"):
+            continue
+        content = meta.attributes.get("content")
+        if not content:
+            continue
+        for attr in ("name", "property", "itemprop", "http-equiv"):
+            value = meta.attributes.get(attr)
+            if value and value.lower() in allowed:
+                return content
     return None
 
 
