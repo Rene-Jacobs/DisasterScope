@@ -14,6 +14,7 @@ Functions:
 
 # Standard library imports
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 # Third-party imports
 import requests
@@ -262,6 +263,20 @@ def search_articles(
             # Process this batch of results
             batch_relevant_count = 0
             for item in data.get("items", []):
+                link = item.get("link", "")
+                # Skip direct links to PDF files
+                parsed_path = urlparse(link).path.lower()
+                file_format = item.get("fileFormat", "").lower()
+                mime_type = item.get("mime", "").lower()
+                if (
+                    parsed_path.endswith(".pdf")
+                    or file_format == "pdf"
+                    or mime_type == "application/pdf"
+                ):
+                    title_preview = item.get("title", "")[:60]
+                    print(f"✗ Skipping PDF file: {title_preview}...")
+                    continue
+
                 # Check if this is a relevant article before adding
                 identified_sectors = _is_relevant_article(
                     item, query, sectors, disaster_type
