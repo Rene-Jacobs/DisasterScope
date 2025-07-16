@@ -16,47 +16,16 @@ import src.utils.search_api as search_api
 import src.utils.article_analyzer as article_analyzer
 import src.utils.report_generator as report_generator
 
+# Shared configuration lists
+from src.config import (
+    PRIORITY_1_SECTORS,
+    PRIORITY_2_SECTORS,
+    ALL_SECTORS,
+    DISASTER_TYPES,
+)
 
-# Define available sectors
-PRIORITY_1_SECTORS = [
-    "Chemical",
-    "Commercial Facilities",
-    "Communications",
-    "Critical Manufacturing",
-    "Dams",
-    "Emergency Services",
-    "Information Technology",
-    "Nuclear",
-    "Transportation",
-    "Government Facilities",
-]
 
-PRIORITY_2_SECTORS = [
-    "Energy",
-    "Water",
-    "Defense",
-    "Financial",
-    "Healthcare",
-    "Food and Agriculture",
-]
-
-ALL_SECTORS = PRIORITY_1_SECTORS + PRIORITY_2_SECTORS
-
-# Define disaster types
-DISASTER_TYPES = [
-    "Hurricane",
-    "Earthquake",
-    "Flood",
-    "Fire",
-    "Tornado",
-    "Tsunami",
-    "Drought",
-    "Landslide",
-    "Volcanic Eruption",
-    "Winter Storm",
-    "Heat Wave",
-    "Other",
-]
+# Sector definitions and disaster types are imported from ``src.config``
 
 
 class RedirectText:
