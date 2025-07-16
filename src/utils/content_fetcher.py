@@ -124,8 +124,13 @@ async def fetch_article_with_retry(url: str) -> Tuple[str, int, str]:
                         content_bytes = content_bytes[:500000]
                         logger.info(f"Limited content to 500KB for performance")
 
-                    # Try only the most common encodings
-                    for encoding in ["utf-8", "latin-1"]:
+                    # Preferred encoding from the response, if provided
+                    encodings = []
+                    if response.charset:
+                        encodings.append(response.charset)
+                    encodings.extend(["utf-8", "latin-1"])
+
+                    for encoding in encodings:
                         try:
                             content = content_bytes.decode(encoding)
                             logger.info(

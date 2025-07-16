@@ -123,6 +123,9 @@ async def analyze_article_async(
         content, status_code, final_url = await fetch_article_with_retry(article_url)
         result.url = final_url
         article_url = final_url
+        # Update domain information in case of redirects
+        parsed_final_url = urlparse(final_url)
+        domain = parsed_final_url.netloc if parsed_final_url.netloc else domain
         stats.extraction_methods_used.append("content_fetcher")
 
         if status_code != 200 or not content:

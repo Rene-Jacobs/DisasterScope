@@ -20,16 +20,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# Common keys that may contain a publication date in JSON-LD structures.
+# The list is kept in lowercase to simplify comparisons.
 DATE_FIELDS = [
-    "datePublished",
-    "dateCreated",
-    "dateModified",
+    "datepublished",
+    "datecreated",
+    "datemodified",
     "date",
-    "publishDate",
-    "publishedDate",
+    "publishdate",
+    "publisheddate",
     "created",
     "modified",
     "published",
+    "uploaddate",
+    "timepublished",
+    "firstpublished",
 ]
 
 
@@ -37,7 +42,8 @@ def _search_json_ld_for_date(obj: Any) -> Optional[str]:
     """Recursively search JSON-LD object for known date fields."""
     if isinstance(obj, dict):
         for key, value in obj.items():
-            if key in DATE_FIELDS:
+            key_lower = key.lower()
+            if key_lower in DATE_FIELDS:
                 return value
             result = _search_json_ld_for_date(value)
             if result:
@@ -188,8 +194,13 @@ def extract_date_from_meta_tags(html: Any) -> Optional[str]:
             continue
         for attr in ("name", "property", "itemprop", "http-equiv"):
             value = meta.attributes.get(attr)
-            if value and value.lower() in allowed:
-                return content
+            if value:
+                value_lower = value.lower()
+                if value_lower in allowed:
+                    return content
+                # Fallback: look for keywords indicating a date field
+                if any(k in value_lower for k in ["publish", "modified", "date", "update"]):
+                    return content
     return None
 
 
@@ -198,10 +209,16 @@ def extract_date_from_time_tags(html: Any) -> Optional[str]:
     time_tags = html.css("time")
     for time_tag in time_tags:
         if hasattr(time_tag, "attributes"):
-            if time_tag.attributes.get("datetime"):
-                return time_tag.attributes.get("datetime")
-            if time_tag.attributes.get("data-time"):
-                return time_tag.attributes.get("data-time")
+            for attr in [
+                "datetime",
+                "data-time",
+                "data-pubdate",
+                "data-published",
+                "data-timestamp",
+                "date",
+            ]:
+                if time_tag.attributes.get(attr):
+                    return time_tag.attributes.get(attr)
         if time_tag.text() and re.search(r"\d{4}", time_tag.text()):
             return time_tag.text().strip()
     return None
@@ -380,7 +397,11 @@ def normalize_date(date_str: str, method: str = "unknown") -> Optional[str]:
         return f"{date_str}-01-01"
 
     # Attempt to parse using dateparser
-    dt = parse_date(date_str, settings={"PREFER_DAY_OF_MONTH": "first"})
+    dt = parse_date(
+        date_str,
+        settings={"PREFER_DAY_OF_MONTH": "first", "RELATIVE_BASE": datetime.utcnow()},
+        languages=["en"],
+    )
     if dt:
         return dt.strftime("%Y-%m-%d")
 
