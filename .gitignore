@@ -11,3 +11,5 @@ src/gui/__pycache__/
 src/gui/__pycache__
 /.vscode/*
 /*.xlsx
+/venv/
+.DS_Store
