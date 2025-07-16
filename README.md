@@ -13,7 +13,7 @@ A Python application for analyzing the impact of hurricanes and other disasters 
 
 ### Prerequisites
 
-* Python 3.8 or higher
+* Python 3.8 or higher with `tkinter` support (install the `python3-tk` package on Linux)
 * Google API Key and Custom Search Engine ID
 
 ### Setup
