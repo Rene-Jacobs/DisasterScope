@@ -22,6 +22,14 @@ Attributes:
 # Standard library imports
 from typing import List
 
+# Import shared configuration lists
+from .config import (
+    PRIORITY_1_SECTORS,
+    PRIORITY_2_SECTORS,
+    ALL_SECTORS,
+    DISASTER_TYPES,
+)
+
 # Local imports
 from .utils.article_analyzer import analyze_article, analyze_articles
 from .utils.impact_analyzer import extract_structured_impact_details
@@ -31,44 +39,8 @@ from .utils.search_api import search_articles
 __version__ = "1.0.0"
 __author__ = "Disaster Impact Analysis Team"
 
-# Define common data available throughout the package
-PRIORITY_1_SECTORS: List[str] = [
-    "Chemical",
-    "Commercial Facilities",
-    "Communications",
-    "Critical Manufacturing",
-    "Dams",
-    "Emergency Services",
-    "Information Technology",
-    "Nuclear",
-    "Transportation",
-    "Government Facilities",
-]
-
-PRIORITY_2_SECTORS: List[str] = [
-    "Energy",
-    "Water",
-    "Defense",
-    "Financial",
-    "Healthcare",
-    "Food and Agriculture",
-]
-
-ALL_SECTORS: List[str] = PRIORITY_1_SECTORS + PRIORITY_2_SECTORS
-
-DISASTER_TYPES: List[str] = [
-    "Hurricane",
-    "Earthquake",
-    "Flood",
-    "Fire",
-    "Tornado",
-    "Tsunami",
-    "Drought",
-    "Landslide",
-    "Volcanic Eruption",
-    "Winter Storm",
-    "Heat Wave",
-]
+# The infrastructure sector lists and supported disaster types are
+# defined in :mod:`src.config` and imported above for convenience.
 
 __all__ = [
     # Version information

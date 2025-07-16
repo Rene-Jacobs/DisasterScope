@@ -19,6 +19,14 @@ import os
 import sys
 from typing import List, Optional, Tuple
 
+# Shared configuration
+from config import (
+    PRIORITY_1_SECTORS,
+    PRIORITY_2_SECTORS,
+    ALL_SECTORS,
+    DISASTER_TYPES,
+)
+
 # Third-party imports
 from dotenv import load_dotenv
 
@@ -33,45 +41,7 @@ DEFAULT_OUTPUT_FILE = "disaster_impact_report.xlsx"
 MIN_DISASTER_NAME_LENGTH = 2
 MAX_DISASTER_NAME_LENGTH = 100
 
-# Define available sectors (moved to constants for better maintainability)
-PRIORITY_1_SECTORS = [
-    "Chemical",
-    "Commercial Facilities",
-    "Communications",
-    "Critical Manufacturing",
-    "Dams",
-    "Emergency Services",
-    "Information Technology",
-    "Nuclear",  # Shortened from "Nuclear Reactors, Materials, and Waste"
-    "Transportation",  # Shortened from "Transportation Systems"
-    "Government Facilities",
-]
 
-PRIORITY_2_SECTORS = [
-    "Energy",
-    "Water",  # Shortened from "Water and Wastewater Systems"
-    "Defense",  # Shortened from "Defense Industrial Base"
-    "Financial",  # Shortened from "Financial Services"
-    "Healthcare",  # Shortened from "Healthcare and Public Health"
-    "Food and Agriculture",
-]
-
-ALL_SECTORS = PRIORITY_1_SECTORS + PRIORITY_2_SECTORS
-
-# Define disaster types
-DISASTER_TYPES = [
-    "Hurricane",
-    "Earthquake",
-    "Flood",
-    "Fire",
-    "Tornado",
-    "Tsunami",
-    "Drought",
-    "Landslide",
-    "Volcanic Eruption",
-    "Winter Storm",
-    "Heat Wave",
-]
 
 
 def main() -> None:
