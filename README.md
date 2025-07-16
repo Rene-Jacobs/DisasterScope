@@ -20,7 +20,8 @@ A Python application for analyzing the impact of hurricanes and other disasters 
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/disaster-impact-analyzer.gitcd disaster-impact-analyzer
+   git clone https://github.com/yourusername/disaster-impact-analyzer.git
+   cd disaster-impact-analyzer
    ```
 2. Install required packages:
    ```
@@ -28,7 +29,8 @@ A Python application for analyzing the impact of hurricanes and other disasters 
    ```
 3. Create a `.env` file in the root directory with your Google API credentials:
    ```
-   api_key=YOUR_GOOGLE_API_KEYsearch_engine_id=YOUR_SEARCH_ENGINE_ID
+   api_key=YOUR_GOOGLE_API_KEY
+   search_engine_id=YOUR_SEARCH_ENGINE_ID
    ```
 
 ## Usage
